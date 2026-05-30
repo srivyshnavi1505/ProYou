@@ -1,7 +1,7 @@
-const cron = require('node-cron')
-const axios = require('axios')
-const { generateEmailDigest, generatePlacementScore } = require('../services/aiService')
-const { sendDigest, sendContestReminder, sendProductivityAlert } = require('../services/emailService')
+import cron from 'node-cron'
+import axios from 'axios'
+import { generateEmailDigest, generatePlacementScore } from '../services/aiService.js'
+import { sendDigest, sendContestReminder, sendProductivityAlert } from '../services/emailService.js'
 
 // Simulated user store (in prod, pull from DB)
 const getUserSettings = () => ({
@@ -20,7 +20,6 @@ cron.schedule('0 20 * * *', async () => {
     const s = getUserSettings()
     if (!s.email || !s.emailNotifications) return
 
-    // Simplified: if GitHub streak drops to 0, alert
     if (s.githubUsername) {
       const r = await axios.get(`http://localhost:${process.env.PORT || 3001}/api/github/${s.githubUsername}`)
       const { streak } = r.data
@@ -70,12 +69,9 @@ cron.schedule('0 9 * * *', async () => {
 
     const r = await axios.get(`http://localhost:${process.env.PORT || 3001}/api/contests`).catch(() => null)
     const contests = r?.data || []
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
 
     for (const c of contests) {
-      const cDate = new Date(c.startTime)
-      const diffH = (cDate - new Date()) / 3600000
+      const diffH = (new Date(c.startTime) - new Date()) / 3600000
       if (diffH >= 20 && diffH <= 28) {
         await sendContestReminder(s.email, c)
         console.log('[CRON] Contest reminder sent:', c.name)

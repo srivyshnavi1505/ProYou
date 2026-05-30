@@ -1,6 +1,7 @@
-const express = require('express')
-const axios   = require('axios')
-const router  = express.Router()
+import express from 'express'
+import axios   from 'axios'
+
+const router = express.Router()
 
 const cache = new Map()
 const TTL   = 30 * 60 * 1000  // 30 min
@@ -63,4 +64,4 @@ router.get('/', async (req, res) => {
   res.json(results)
 })
 
-module.exports = router
+export default router

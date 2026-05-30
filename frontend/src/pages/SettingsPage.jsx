@@ -10,15 +10,23 @@ export default function SettingsPage() {
   const settings       = useAppStore(s => s.settings)
   const user           = useAppStore(s => s.user)
   const updateSettings = useAppStore(s => s.updateSettings)
-  const [local, setLocal] = useState({ ...settings })
-  const [saved, setSaved] = useState(false)
+  const [local, setLocal]       = useState({ ...settings })
+  const [saved, setSaved]       = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
   const [mailLoading, setMailLoading] = useState(false)
 
-  const save = () => {
-    updateSettings(local)
-    setSaved(true)
-    toast.success('Settings saved! ✅')
-    setTimeout(() => setSaved(false), 2000)
+  const save = async () => {
+    setSaveLoading(true)
+    try {
+      await updateSettings(local)
+      setSaved(true)
+      toast.success('Settings saved to your account! ✅')
+      setTimeout(() => setSaved(false), 2000)
+    } catch {
+      toast.error('Failed to save settings')
+    } finally {
+      setSaveLoading(false)
+    }
   }
 
   const sendDigest = async () => {
@@ -109,28 +117,9 @@ export default function SettingsPage() {
       </Section>
 
       {/* Save */}
-      <button className="btn btn-primary btn-lg" onClick={save} style={{ alignSelf: 'flex-start' }}>
-        {saved ? '✅ Saved!' : 'Save Settings'}
+      <button className="btn btn-primary btn-lg" onClick={save} disabled={saveLoading} style={{ alignSelf: 'flex-start' }}>
+        {saveLoading ? 'Saving…' : saved ? '✅ Saved!' : 'Save Settings'}
       </button>
-
-      {/* API status hints */}
-      <div className="card card-peach">
-        <h4 style={{ marginBottom: 12 }}>🔑 API Key Setup</h4>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {[
-            { key: 'GEMINI_API_KEY', desc: 'AI features (score, insights, tutor, flashcards)', url: 'https://aistudio.google.com' },
-            { key: 'GITHUB_TOKEN', desc: 'GitHub contribution data', url: 'https://github.com/settings/tokens' },
-            { key: 'NEWS_API_KEY', desc: 'Company news feed', url: 'https://newsapi.org' },
-            { key: 'RESEND_API_KEY', desc: 'Email notifications', url: 'https://resend.com' },
-          ].map(({ key, desc, url }) => (
-            <div key={key} style={{ display: 'flex', gap: 10, padding: '8px 12px', background: 'rgba(3,0,39,0.3)', borderRadius: 8 }}>
-              <code style={{ fontSize: 12, color: 'var(--teal)', fontFamily: 'monospace', flexShrink: 0 }}>{key}</code>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{desc} · <a href={url} target="_blank" rel="noreferrer" style={{ color: 'var(--teal)' }}>Get key →</a></span>
-            </div>
-          ))}
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 12 }}>Add all keys to <code style={{ color: 'var(--peach)', fontFamily:'monospace' }}>backend/.env</code></p>
-      </div>
     </div>
   )
 }

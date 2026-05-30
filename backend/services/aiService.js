@@ -1,139 +1,303 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai')
+import Groq from 'groq-sdk'
 
-let genAI = null
-function getGenAI() {
-  if (!genAI && process.env.GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
+
+// Model to use — see https://console.groq.com/docs/models
+// llama-3.3-70b-versatile is fast, free-tier, and great at JSON
+const MODEL = 'llama-3.3-70b-versatile'
+
+// Core wrapper: retries on 429 rate-limits with exponential backoff
+async function callGroq(systemPrompt, userPrompt, jsonMode = false, retries = 3) {
+  if (!process.env.GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured in .env')
+
+  const requestParams = {
+    model: MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    temperature: jsonMode ? 0.3 : 0.7,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
   }
-  return genAI
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await groq.chat.completions.create(requestParams)
+      const text = response.choices?.[0]?.message?.content || ''
+
+      if (jsonMode) {
+        try {
+          return JSON.parse(text)
+        } catch (e) {
+          console.error('Groq JSON parse error. Raw text:', text)
+          throw new Error('Failed to parse Groq JSON response')
+        }
+      }
+
+      return text
+
+    } catch (err) {
+      const status = err?.status
+      const isRateLimit = status === 429
+      const isLast = attempt === retries
+
+      if (isRateLimit && !isLast) {
+        const delay = Math.pow(2, attempt) * 1000
+        console.warn(`Groq 429 rate limit — retrying in ${delay}ms (attempt ${attempt + 1}/${retries})`)
+        await new Promise(res => setTimeout(res, delay))
+        continue
+      }
+
+      throw err
+    }
+  }
 }
 
-async function callGemini(prompt, jsonMode = false) {
-  const ai = getGenAI()
-  if (!ai) throw new Error('GEMINI_API_KEY not configured in .env')
-
-  const model = ai.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: jsonMode
-      ? { responseMimeType: 'application/json', temperature: 0.3 }
-      : { temperature: 0.7 }
-  })
-
-  const result = await model.generateContent(prompt)
-  const text   = result.response.text()
-  if (jsonMode) {
-    try { return JSON.parse(text) } catch { return JSON.parse(text.replace(/```json|```/g, '').trim()) }
-  }
-  return text
+// Role-specific score schema definitions
+const ROLE_SCORE_SCHEMA = {
+  'ML Engineer': {
+    categories: { ml_knowledge: 25, coding_python: 25, research_kaggle: 25, math_depth: 25 },
+    guidance: 'ml_knowledge = ML concepts & architectures; coding_python = LeetCode + numpy/pandas fluency; research_kaggle = projects, papers, competitions; math_depth = linear algebra, probability, calculus intuition.',
+  },
+  'PM': {
+    categories: { product_sense: 25, communication: 25, analytical: 25, behavioral: 25 },
+    guidance: 'product_sense = framework thinking, feature prioritization; communication = clarity, structure; analytical = metrics, A/B testing awareness; behavioral = STAR answers, leadership signals from GitHub activity.',
+  },
+  'Data Analyst': {
+    categories: { sql_skills: 25, statistics: 25, visualization: 25, communication: 25 },
+    guidance: 'sql_skills = infer from LeetCode DB problems if any; statistics = hypothesis testing, distributions; visualization = GitHub projects; communication = clarity of insights.',
+  },
+  'DevOps': {
+    categories: { infrastructure: 25, automation_ci: 25, cloud_certs: 25, reliability: 25 },
+    guidance: 'infrastructure = system understanding; automation_ci = scripting, GitHub Actions usage; cloud_certs = infer from repos; reliability = monitoring, observability awareness.',
+  },
+  'Frontend': {
+    categories: { ui_ux_sense: 25, framework_depth: 25, portfolio: 25, problem_solving: 25 },
+    guidance: 'ui_ux_sense = design awareness; framework_depth = React/Vue/Angular proficiency; portfolio = GitHub public UI projects; problem_solving = LeetCode for frontend-relevant algorithms.',
+  },
+}
+// SWE, Backend, Full Stack all use DSA-focused schema
+const DEFAULT_SCORE_SCHEMA = {
+  categories: { dsa: 25, system_design: 25, github_projects: 25, consistency: 25 },
+  guidance: 'dsa = LeetCode Easy/Medium/Hard distribution; system_design = infer from hard problems and repo complexity; github_projects = publicRepos, stars, contributions; consistency = streak days.',
 }
 
 // ── Placement Score ───────────────────────────────────────
 async function generatePlacementScore({ role, github, leetcode, targetCompanies }) {
-  const prompt = `You are a placement readiness evaluator for tech companies. Score this candidate out of 100 (25 pts each category) for the role: ${role}.
+  const schema = ROLE_SCORE_SCHEMA[role] || DEFAULT_SCORE_SCHEMA
+  const categoryKeys = Object.keys(schema.categories)
+  const categorySchema = categoryKeys.map(k => `"${k}": <number 0-25>`).join(',\n    ')
+
+  const systemPrompt = 'You are a placement readiness evaluator for tech companies. Return ONLY valid JSON matching the exact schema requested.'
+
+  const userPrompt = `Score this ${role} candidate out of 100 (25 pts each category) targeting: ${(targetCompanies || []).join(', ') || 'top tech companies'}.
 
 Candidate Data:
-- GitHub streak: ${github?.streak ?? 0} days, ${github?.totalContributions ?? 0} contributions, ${github?.publicRepos ?? 0} repos
+- GitHub streak: ${github?.streak ?? 0} days, ${github?.totalContributions ?? 0} contributions, ${github?.publicRepos ?? 0} public repos
 - LeetCode: ${leetcode?.easySolved ?? 0} Easy, ${leetcode?.mediumSolved ?? 0} Medium, ${leetcode?.hardSolved ?? 0} Hard solved. Streak: ${leetcode?.streak ?? 0} days
-- Target companies: ${(targetCompanies || []).join(', ')}
+
+Scoring guidance for ${role}:
+${schema.guidance}
 
 Return a JSON object with EXACTLY this schema:
 {
   "total": <number 0-100>,
   "breakdown": {
-    "dsa": <number 0-25>,
-    "github": <number 0-25>,
-    "communication": <number 0-25>,
-    "contests": <number 0-25>
+    ${categorySchema}
   },
-  "advice": [<string tip 1>, <string tip 2>, <string tip 3>]
+  "advice": [<role-specific tip 1>, <role-specific tip 2>, <role-specific tip 3>]
 }
 
-Be realistic and role-specific. For ML, weight hard problems higher. For PM, weight communication and GitHub projects higher.`
+Advice must be specific to a ${role} interview process, not generic LeetCode grind advice.`
 
-  return callGemini(prompt, true)
+  return callGroq(systemPrompt, userPrompt, true)
 }
 
 // ── Weekly Insight ────────────────────────────────────────
 async function generateWeeklyInsight({ role, github, leetcode }) {
-  const prompt = `You are a personal placement coach. Write a concise, encouraging weekly insight (2-3 sentences, plain English, no bullet points) for a ${role} candidate.
+  // Role-specific lens for the insight
+  const roleLens = {
+    'ML Engineer':    'Focus on ML project activity on GitHub, not just LeetCode streaks. Mention model-building, datasets, or research.',
+    'PM':             'LeetCode matters less. Focus on communication signals, GitHub activity as a proxy for technical curiosity, and consistency.',
+    'Data Analyst':   'SQL and stats matter most. Interpret LeetCode medium/hard as analytical thinking signals.',
+    'DevOps':         'GitHub contribution patterns signal automation habits. Less focus on LeetCode hard.',
+    'Frontend':       'GitHub projects and UI work matter as much as LeetCode. Mention portfolio-building.',
+  }[role] || 'Balance DSA depth with GitHub project quality and consistency.'
+
+  const systemPrompt = 'You are a personal placement coach who gives sharp, role-specific weekly insights in 2-3 plain English sentences.'
+
+  const userPrompt = `Write a concise weekly insight for a ${role} candidate. Be personal, direct, and role-aware.
 
 Stats:
-- GitHub streak: ${github?.streak ?? 0} days
-- LeetCode: ${leetcode?.totalSolved ?? 0} total solved (${leetcode?.easySolved ?? 0}E/${leetcode?.mediumSolved ?? 0}M/${leetcode?.hardSolved ?? 0}H)
-- LeetCode streak: ${leetcode?.streak ?? 0} days
+- GitHub streak: ${github?.streak ?? 0} days, ${github?.publicRepos ?? 0} repos
+- LeetCode: ${leetcode?.totalSolved ?? 0} total solved (${leetcode?.easySolved ?? 0}E/${leetcode?.mediumSolved ?? 0}M/${leetcode?.hardSolved ?? 0}H), streak: ${leetcode?.streak ?? 0} days
 
-Comment on what's going well, what needs work, and one specific action item for this week. Be personal and direct.`
+Role-specific lens: ${roleLens}
 
-  return callGemini(prompt)
+2-3 sentences max. No bullet points. End with one concrete action item for this week tailored to ${role} interviews.`
+
+  return callGroq(systemPrompt, userPrompt)
 }
 
 // ── Flashcard Generator ───────────────────────────────────
+
+// Role-specific flashcard topic definitions
+const ROLE_FLASHCARD_TOPICS = {
+  'ML Engineer': [
+    { topic: 'model fundamentals', when: () => true },
+    { topic: 'deep learning & neural networks', when: () => true },
+    { topic: 'feature engineering & preprocessing', when: () => true },
+    { topic: 'model evaluation & loss functions', when: () => true },
+    { topic: 'NLP & transformer architecture', when: () => true },
+  ],
+  'PM': [
+    { topic: 'product frameworks (CIRCLES, HEART, RICE)', when: () => true },
+    { topic: 'product metrics & analytics', when: () => true },
+    { topic: 'prioritization & roadmapping', when: () => true },
+    { topic: 'user research & discovery', when: () => true },
+    { topic: 'behavioral questions (STAR method)', when: () => true },
+  ],
+  'Data Analyst': [
+    { topic: 'SQL window functions & aggregations', when: () => true },
+    { topic: 'statistics & hypothesis testing', when: () => true },
+    { topic: 'A/B testing & experiment design', when: () => true },
+    { topic: 'data visualization & storytelling', when: () => true },
+    { topic: 'Python pandas & data wrangling', when: () => true },
+  ],
+  'DevOps': [
+    { topic: 'Docker & container networking', when: () => true },
+    { topic: 'Kubernetes pod lifecycle & orchestration', when: () => true },
+    { topic: 'CI/CD pipeline design', when: () => true },
+    { topic: 'cloud infrastructure (AWS/GCP/Azure)', when: () => true },
+    { topic: 'monitoring, alerting & SRE principles', when: () => true },
+  ],
+  'Frontend': [
+    { topic: 'React hooks & component lifecycle', when: () => true },
+    { topic: 'CSS layout, specificity & animations', when: () => true },
+    { topic: 'browser rendering & performance optimization', when: () => true },
+    { topic: 'accessibility (ARIA) & semantic HTML', when: () => true },
+    { topic: 'JavaScript async, closures & event loop', when: () => true },
+  ],
+}
+
 async function generateFlashcards({ role, github, leetcode }) {
-  const weakArea = (leetcode?.hardSolved ?? 0) < 10 ? 'hard problems and advanced data structures'
-    : (leetcode?.mediumSolved ?? 0) < 50 ? 'medium-level dynamic programming and graphs'
-    : 'system design and distributed systems'
+  // For SWE/Backend/Full Stack — DSA-focused with difficulty-based targeting
+  const isDsaRole = !ROLE_FLASHCARD_TOPICS[role]
 
-  const prompt = `Generate 5 technical flashcards for a ${role} candidate who needs to improve on ${weakArea}.
+  let topicInstruction
+  if (isDsaRole) {
+    const weakArea = (leetcode?.hardSolved ?? 0) < 10
+      ? 'hard problems and advanced data structures (segment trees, tries, union-find)'
+      : (leetcode?.mediumSolved ?? 0) < 50
+      ? 'medium-level dynamic programming and graph algorithms'
+      : 'system design — scalability, databases, distributed systems'
+    topicInstruction = `DSA topic: ${weakArea}. The candidate is a ${role}.`
+  } else {
+    const topics = ROLE_FLASHCARD_TOPICS[role].map(t => t.topic)
+    topicInstruction = `Generate one card per topic in this list: ${topics.join(' | ')}. These are the exact 5 topics — one card each.`
+  }
 
-Return JSON array:
+  const systemPrompt = `You are an expert ${role} interview coach. Return ONLY a valid JSON array of exactly 5 flashcards.`
+
+  const userPrompt = `Generate 5 technical flashcards for a ${role} candidate.
+${topicInstruction}
+
+Return a JSON array with exactly 5 items:
 [
   {
-    "question": "<clear, specific technical question>",
-    "answer": "<concise but complete answer, 2-4 sentences>",
-    "tag": "<topic tag, e.g. DP, Trees, System Design>"
+    "question": "<specific, interview-realistic question for a ${role}>",
+    "answer": "<concise, memorable answer — 2-4 sentences, no textbook definitions>",
+    "tag": "<short topic label>"
   }
 ]
 
-Make questions interview-realistic. Answers should be memorable, not textbook definitions.`
+Make every question feel like something a ${role} interviewer at a top company would actually ask.`
 
-  return callGemini(prompt, true)
+  return callGroq(systemPrompt, userPrompt, true)
 }
 
 // ── LeetCode Tutor ────────────────────────────────────────
 async function tutorResponse({ problem, hintLevel, role, message, history }) {
   const levelInstruction = {
-    nudge: 'Give a single-sentence nudge pointing toward the key insight. Do NOT reveal the approach.',
-    approach: 'Explain the algorithmic strategy clearly without writing code. Mention time complexity.',
-    walkthrough: 'Give a complete step-by-step walkthrough with commented pseudocode or code.'
-  }[hintLevel] || 'Help the user understand the problem.'
+    nudge:       'Give ONE sharp sentence that nudges toward the key insight. No approach, no code. Make it feel like a light tap on the shoulder.',
+    approach:    'Explain the core algorithmic strategy in 3–5 sentences max. Name the pattern (e.g. sliding window, two pointers). State time/space complexity. No full code.',
+    walkthrough: 'Give a tight, commented code solution. Walk through it in ≤5 bullet points. Highlight the one tricky line.',
+  }[hintLevel] || 'Help the user understand the problem clearly.'
 
   const roleNote = role === 'ML Engineer'
-    ? 'When relevant, mention vectorized or GPU-friendly implementations.'
+    ? 'When relevant, mention vectorized or numpy-friendly implementations.'
     : role === 'PM'
-    ? 'Focus on clarity of explanation over technical depth.'
-    : 'Emphasize time and space complexity analysis.'
+    ? 'Prioritize intuition and plain-English reasoning over technical depth.'
+    : 'Always state time and space complexity.'
 
-  const systemPrompt = `You are an expert coding interview tutor helping a ${role} candidate.
-Hint level: ${levelInstruction}
-Role note: ${roleNote}
-Problem: ${problem || 'Not specified yet'}`
+  const systemPrompt = `You are CodeMentor — a sharp, supportive coding interview coach helping a ${role} candidate.
 
-  const historyText = (history || []).map(m => `${m.role === 'user' ? 'User' : 'Tutor'}: ${m.content}`).join('\n')
-  const fullPrompt = `${systemPrompt}\n\nConversation so far:\n${historyText}\n\nUser: ${message}\n\nTutor:`
+YOUR PERSONA:
+- Warm but efficient. Think "senior engineer who actually enjoys teaching."
+- Never start with "Great question!" or "Certainly!" or "I'll provide a step-by-step..." — just dive in.
+- Be direct. Cut filler. Every sentence should earn its place.
+- Use light formatting: short code blocks, bold for key terms, but no giant headers.
 
-  return callGemini(fullPrompt)
+HINT LEVEL — ${hintLevel.toUpperCase()}:
+${levelInstruction}
+
+ROLE CONTEXT:
+${roleNote}
+
+INTERACTION RULES:
+- After your response, ALWAYS end with a short, engaging follow-up question to check understanding or nudge thinking. Examples: "Does that click?" / "What would happen if the array were unsorted?" / "Can you spot where we'd handle duplicates?" / "Want me to walk through a dry run?"
+- If the user seems confused, simplify — don't repeat the same explanation louder.
+- If they've got it right, affirm briefly and challenge them to go deeper.
+- Never give the full solution unless hint level is "walkthrough".
+
+PROBLEM CONTEXT:
+${problem ? `The problem being discussed:\n${problem}` : 'No specific problem pasted yet — answer based on the user\'s question.'}`
+
+  // Build full message history for conversational context
+  const historyMessages = (history || []).map(m => ({
+    role: m.role === 'user' ? 'user' : 'assistant',
+    content: m.content,
+  }))
+
+  const response = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...historyMessages,
+      { role: 'user', content: message },
+    ],
+    temperature: 0.65,
+    max_tokens: 800,
+  })
+
+  return response.choices?.[0]?.message?.content || ''
 }
 
 // ── News Filter ───────────────────────────────────────────
 async function filterNewsRelevance(articles, companies) {
   const summaries = articles.slice(0, 10).map((a, i) => `${i}: ${a.title}`).join('\n')
-  const prompt = `You are evaluating news articles for placement relevance for companies: ${companies.join(', ')}.
+
+  const systemPrompt = 'You are evaluating news articles for placement relevance. Return ONLY a valid JSON array.'
+
+  const userPrompt = `Evaluate these articles for job seekers targeting: ${companies.join(', ')}.
 
 Articles:
 ${summaries}
 
-Return JSON array of objects (one per article) with placement relevance:
+Return a JSON array:
 [{ "index": 0, "relevance": "high"|"medium"|"low", "summary": "<one sentence why this matters for job seekers>" }]
 
 High relevance = hiring news, layoffs, new engineering teams, internship programs, leadership changes.
 Low relevance = quarterly earnings with no hiring mention, generic business news.`
 
-  try { return callGemini(prompt, true) } catch { return [] }
+  try { return callGroq(systemPrompt, userPrompt, true) } catch { return [] }
 }
 
 // ── Email Digest ──────────────────────────────────────────
 async function generateEmailDigest({ user, github, leetcode, score, contests }) {
-  const prompt = `Write a concise, motivating weekly placement digest email for ${user?.name || 'a developer'}.
+  const systemPrompt = 'You are a motivating placement coach writing weekly digest emails. Keep them concise, friendly, and under 200 words.'
+
+  const userPrompt = `Write a concise, motivating weekly placement digest email for ${user?.name || 'a developer'}.
 
 Data:
 - GitHub streak: ${github?.streak ?? 0} days
@@ -149,10 +313,10 @@ Format as plain text email with:
 
 Keep it under 200 words. Friendly but direct tone.`
 
-  return callGemini(prompt)
+  return callGroq(systemPrompt, userPrompt)
 }
 
-module.exports = {
+export {
   generatePlacementScore,
   generateWeeklyInsight,
   generateFlashcards,

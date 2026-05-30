@@ -101,9 +101,10 @@ export default function TutorPage() {
     try {
       const r = await askTutor({ problem, hintLevel: hint, role: settings.role, message: content, history: msgs })
       setMsgs(m => [...m, { role: 'ai', content: r.data.reply }])
-    } catch {
-      toast.error('AI Tutor unavailable — check backend API key')
-      setMsgs(m => [...m, { role: 'ai', content: '⚠️ Service unavailable. Please check your Gemini API key in backend .env' }])
+    } catch (err) {
+      const errMsg = err.response?.data?.message || err.message || 'AI Tutor unavailable — check GROQ_API_KEY in backend .env'
+      toast.error(errMsg)
+      setMsgs(m => [...m, { role: 'ai', content: `⚠️ ${errMsg}` }])
     } finally { setLoading(false) }
   }
 

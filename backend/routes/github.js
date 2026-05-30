@@ -1,8 +1,9 @@
-const express = require('express')
-const axios   = require('axios')
-const router  = express.Router()
+import express from 'express'
+import axios   from 'axios'
 
-// Simple in-memory cache (replace with Redis in prod)
+const router = express.Router()
+
+// Simple in-memory cache (Map() is fine for single-instance dev)
 const cache = new Map()
 const TTL = 6 * 60 * 60 * 1000  // 6 hours
 
@@ -25,7 +26,7 @@ router.get('/:username', async (req, res) => {
       axios.get(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers }),
     ])
 
-    const user  = userRes.data
+    const user   = userRes.data
     const events = eventsRes.data
 
     // Compute streak
@@ -37,7 +38,7 @@ router.get('/:username', async (req, res) => {
 
     let streak = 0
     let cur = new Date()
-    cur.setHours(0,0,0,0)
+    cur.setHours(0, 0, 0, 0)
     for (const d of pushDates) {
       const eventDate = new Date(d)
       const diff = Math.round((cur - eventDate) / 86400000)
@@ -76,4 +77,4 @@ router.get('/:username', async (req, res) => {
   }
 })
 
-module.exports = router
+export default router

@@ -1,21 +1,34 @@
-require('dotenv').config()
-const express  = require('express')
-const cors     = require('cors')
-const morgan   = require('morgan')
-const helmet   = require('helmet')
+import 'dotenv/config'
+import express   from 'express'
+import cors      from 'cors'
+import morgan    from 'morgan'
+import helmet    from 'helmet'
+import mongoose  from 'mongoose'
 
-const authRoutes     = require('./routes/auth')
-const githubRoutes   = require('./routes/github')
-const leetcodeRoutes = require('./routes/leetcode')
-const aiRoutes       = require('./routes/ai')
-const newsRoutes     = require('./routes/news')
-const contestRoutes  = require('./routes/contests')
-const eventRoutes    = require('./routes/events')
-const linkedinRoutes = require('./routes/linkedin')
-const factRoutes     = require('./routes/facts')
+import authRoutes     from './routes/auth.js'
+import githubRoutes   from './routes/github.js'
+import leetcodeRoutes from './routes/leetcode.js'
+import aiRoutes       from './routes/ai.js'
+import newsRoutes     from './routes/news.js'
+import contestRoutes  from './routes/contests.js'
+import eventRoutes    from './routes/events.js'
+import linkedinRoutes from './routes/linkedin.js'
+import factRoutes     from './routes/facts.js'
+
 
 // Cron jobs
-require('./cron/scheduler')
+import './cron/scheduler.js'
+
+// ── MongoDB Atlas connection ──────────────────────────────
+const MONGO_URI = process.env.MONGODB_URI
+if (!MONGO_URI) {
+  console.error('❌  MONGODB_URI is not set in .env — please add it and restart.')
+  process.exit(1)
+}
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log('✅  MongoDB Atlas connected'))
+  .catch(err => { console.error('❌  MongoDB connection error:', err.message); process.exit(1) })
 
 const app = express()
 

@@ -1,7 +1,8 @@
-const express = require('express')
-const axios   = require('axios')
-const router  = express.Router()
-const { filterNewsRelevance } = require('../services/aiService')
+import express from 'express'
+import axios   from 'axios'
+import { filterNewsRelevance } from '../services/aiService.js'
+
+const router = express.Router()
 
 const cache = new Map()
 const TTL   = 60 * 60 * 1000  // 1 hour
@@ -17,7 +18,6 @@ router.get('/', async (req, res) => {
 
   try {
     if (!process.env.NEWS_API_KEY) {
-      // Return mock data if no API key
       return res.json(MOCK_NEWS(companies))
     }
 
@@ -64,4 +64,4 @@ function MOCK_NEWS(companies) {
   ])
 }
 
-module.exports = router
+export default router

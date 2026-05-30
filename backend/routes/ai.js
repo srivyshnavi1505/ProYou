@@ -1,13 +1,14 @@
-const express = require('express')
-const router  = express.Router()
-const {
+import express from 'express'
+import {
   generatePlacementScore,
   generateWeeklyInsight,
   generateFlashcards,
   tutorResponse,
   generateEmailDigest,
-} = require('../services/aiService')
-const emailService = require('../services/emailService')
+} from '../services/aiService.js'
+import { sendDigest } from '../services/emailService.js'
+
+const router = express.Router()
 
 // Score
 router.post('/score', async (req, res) => {
@@ -56,7 +57,7 @@ router.post('/email-digest', async (req, res) => {
     const { user, github, leetcode, score, contests, email } = req.body
     const body = await generateEmailDigest({ user, github, leetcode, score, contests })
     if (email) {
-      await emailService.sendDigest(email, body)
+      await sendDigest(email, body)
     }
     res.json({ message: 'Digest sent', body })
   } catch (err) {
@@ -64,4 +65,4 @@ router.post('/email-digest', async (req, res) => {
   }
 })
 
-module.exports = router
+export default router

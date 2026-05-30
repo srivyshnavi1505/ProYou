@@ -1,4 +1,4 @@
-const { Resend } = require('resend')
+import { Resend } from 'resend'
 
 let resend = null
 function getResend() {
@@ -62,4 +62,4 @@ async function sendProductivityAlert(to, message) {
   })
 }
 
-module.exports = { sendDigest, sendContestReminder, sendProductivityAlert }
+export { sendDigest, sendContestReminder, sendProductivityAlert }

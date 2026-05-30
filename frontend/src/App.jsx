@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAppStore } from './store/useAppStore'
@@ -20,6 +21,14 @@ function PrivateRoute({ children }) {
 }
 
 export default function App() {
+  const token       = useAppStore(s => s.token)
+  const refreshUser = useAppStore(s => s.refreshUser)
+
+  // On every app load, re-sync the user profile (incl. githubUsername, leetcodeUsername) from MongoDB
+  useEffect(() => {
+    if (token) refreshUser()
+  }, [])
+
   return (
     <BrowserRouter>
       <Toaster

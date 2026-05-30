@@ -42,24 +42,51 @@ export default function ScorePage() {
   const setScore       = useAppStore(s => s.setPlacementScore)
   const setInsight     = useAppStore(s => s.setWeeklyInsight)
   const setAlerts      = useAppStore(s => s.setAlerts)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]       = useState(false)
+  const [loadingStep, setLoadingStep] = useState('')
 
   const generate = async () => {
     setLoading(true)
     try {
-      const payload = { role: settings.role, github: githubData, leetcode: leetcodeData, targetCompanies: settings.targetCompanies }
-      const [scoreRes, insightRes] = await Promise.all([fetchScore(payload), fetchInsight(payload)])
+      const payload = {
+        role: settings.role,
+        github: githubData,
+        leetcode: leetcodeData,
+        targetCompanies: settings.targetCompanies,
+      }
+
+      // Sequential calls — avoid simultaneous requests hitting free-tier 429
+      setLoadingStep('Calculating score…')
+      const scoreRes = await fetchScore(payload)
       setScore(scoreRes.data)
+
+      // Small gap between calls to respect rate limits
+      await new Promise(res => setTimeout(res, 1000))
+
+      setLoadingStep('Generating insight…')
+      const insightRes = await fetchInsight(payload)
       setInsight(insightRes.data.insight)
-      if (scoreRes.data?.total < 50) setAlerts([{ type: 'warn', msg: 'Score below 50 — time to accelerate! 🚀' }])
+
+      if (scoreRes.data?.total < 50) {
+        setAlerts([{ type: 'warn', msg: 'Score below 50 — time to accelerate! 🚀' }])
+      }
       toast.success('Score generated! 🎯')
-    } catch { toast.error('AI service error — check your API key in backend .env') }
-    finally { setLoading(false) }
+    } catch (err) {
+      const status = err?.response?.status
+      if (status === 429) {
+        toast.error('Rate limit hit — wait a moment and try again ⏳')
+      } else {
+        toast.error('AI service error — check your API key in backend .env')
+      }
+    } finally {
+      setLoading(false)
+      setLoadingStep('')
+    }
   }
 
-  const score  = placementScore?.total ?? null
-  const color  = score === null ? '#22C55E' : score >= 75 ? '#22C55E' : score >= 50 ? '#EAB308' : '#EF4444'
-  const label  = score === null ? '' : score >= 75 ? 'Placement Ready! 🚀' : score >= 50 ? 'On Track 📈' : 'Needs Improvement 🔨'
+  const score   = placementScore?.total ?? null
+  const color   = score === null ? '#22C55E' : score >= 75 ? '#22C55E' : score >= 50 ? '#EAB308' : '#EF4444'
+  const label   = score === null ? '' : score >= 75 ? 'Placement Ready! 🚀' : score >= 50 ? 'On Track 📈' : 'Needs Improvement 🔨'
   const bgColor = score === null ? 'var(--white)' : score >= 75 ? '#DCFCE7' : score >= 50 ? '#FEF9C3' : '#FEE2E2'
 
   return (
@@ -106,7 +133,7 @@ export default function ScorePage() {
           <h3 style={{ marginBottom: 22, letterSpacing: '-0.01em' }}>Category Breakdown</h3>
           {CATEGORIES.map(({ key, label, max, icon, color: catColor, bg: catBg }) => {
             const val = placementScore?.breakdown?.[key] ?? null
-            const pct = val !== null ? (val/max)*100 : 0
+            const pct = val !== null ? (val / max) * 100 : 0
             return (
               <div key={key} style={{ marginBottom: 16 }}>
                 <div className="flex-between" style={{ marginBottom: 6 }}>
@@ -135,10 +162,15 @@ export default function ScorePage() {
           })}
         </div>
 
-        <button className="btn btn-primary btn-lg" onClick={generate} disabled={loading} style={{ alignSelf: 'flex-end' }}>
-          <Sparkles size={18} className={loading ? 'anim-spin' : ''} />
-          {loading ? 'Analyzing…' : 'Generate AI Score'}
-        </button>
+        <div style={{ alignSelf: 'flex-end', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+          {loading && loadingStep && (
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{loadingStep}</p>
+          )}
+          <button className="btn btn-primary btn-lg" onClick={generate} disabled={loading}>
+            <Sparkles size={18} className={loading ? 'anim-spin' : ''} />
+            {loading ? 'Analyzing…' : 'Generate AI Score'}
+          </button>
+        </div>
       </div>
 
       {/* AI Advice */}

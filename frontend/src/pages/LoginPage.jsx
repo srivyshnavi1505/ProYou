@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { GoogleLogin } from '@react-oauth/google'
 import { useAppStore } from '../store/useAppStore'
-import { login, register } from '../api'
+import { login, register, googleLogin } from '../api'
 import toast from 'react-hot-toast'
 
 export default function LoginPage() {
@@ -24,6 +25,20 @@ export default function LoginPage() {
       navigate('/')
     } catch (err) {
       toast.error(err.response?.data?.message || 'Something went wrong')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleGoogle = async (credentialResponse) => {
+    setLoading(true)
+    try {
+      const res = await googleLogin(credentialResponse.credential)
+      setAuth(res.data.user, res.data.token)
+      toast.success(`Welcome, ${res.data.user?.name || 'there'}! 🚀`)
+      navigate('/')
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Google sign-in failed')
     } finally {
       setLoading(false)
     }
@@ -170,6 +185,24 @@ export default function LoginPage() {
               }
             </button>
           </form>
+
+          {/* Divider */}
+          <div style={{ display:'flex', alignItems:'center', gap:12, margin:'20px 0' }}>
+            <div style={{ flex:1, height:1, background:'var(--border)' }} />
+            <span style={{ fontSize:12, color:'var(--text-muted)', fontWeight:600 }}>or</span>
+            <div style={{ flex:1, height:1, background:'var(--border)' }} />
+          </div>
+
+          {/* Google Sign-In button */}
+          <GoogleLogin
+            onSuccess={handleGoogle}
+            onError={() => toast.error('Google sign-in was cancelled')}
+            theme="outline"
+            size="large"
+            width={380}
+            text="continue_with"
+            shape="rectangular"
+          />
 
           <p style={{ textAlign:'center', fontSize:13, color:'var(--text-muted)', marginTop:24 }}>
             {mode==='login' ? "Don't have an account? " : "Already have an account? "}

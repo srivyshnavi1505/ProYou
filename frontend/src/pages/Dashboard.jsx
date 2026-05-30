@@ -1,19 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAppStore } from '../store/useAppStore'
 import { fetchGithub, fetchLeetcode, fetchScore, fetchInsight, fetchContests, fetchFact } from '../api'
 import { Flame, Trophy, Code2, Star, TrendingUp, TrendingDown, AlertTriangle, Zap, RefreshCw, ArrowRight, Brain, Target, Clock } from 'lucide-react'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import toast from 'react-hot-toast'
 
-const MOCK_WEEKLY = [
-  { day: 'Mon', github: 3, leetcode: 2 },
-  { day: 'Tue', github: 5, leetcode: 4 },
-  { day: 'Wed', github: 2, leetcode: 1 },
-  { day: 'Thu', github: 6, leetcode: 3 },
-  { day: 'Fri', github: 4, leetcode: 5 },
-  { day: 'Sat', github: 1, leetcode: 6 },
-  { day: 'Sun', github: 3, leetcode: 2 },
-]
 
 function StatCard({ label, value, sub, icon: Icon, bg = '#DCFCE7', iconBg = '#22C55E', trend }) {
   return (
@@ -81,9 +72,32 @@ export default function Dashboard() {
   const setAlerts       = useAppStore(s => s.setAlerts)
   const user            = useAppStore(s => s.user)
 
-  const [loading, setLoading]         = useState(false)
-  const [fact, setFact]               = useState(null)
+  const [loading, setLoading]           = useState(false)
+  const [fact, setFact]                 = useState(null)
   const [scoreLoading, setScoreLoading] = useState(false)
+
+  // Build real 7-day chart data from GitHub contributions + LeetCode calendar
+  const weeklyData = useMemo(() => {
+    // Build fast lookup maps: date -> count
+    const ghMap = {}
+    ;(githubData?.contributions || []).forEach(({ date, count }) => { ghMap[date] = count })
+
+    const lcMap = {}
+    ;(leetcodeData?.calendar || []).forEach(({ date, count }) => { lcMap[date] = count })
+
+    // Last 7 days ending today
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date()
+      d.setDate(d.getDate() - (6 - i))
+      const dateStr = d.toISOString().split('T')[0]
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' })
+      return {
+        day:      dayName,
+        github:   ghMap[dateStr]   || 0,
+        leetcode: lcMap[dateStr]   || 0,
+      }
+    })
+  }, [githubData, leetcodeData])
 
   const loadFact = async () => {
     try { const r = await fetchFact(); setFact(r.data.fact) }
@@ -117,6 +131,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadData()
+  }, [settings.githubUsername, settings.leetcodeUsername]) // re-fetch when user switches accounts
+
+  useEffect(() => {
     fetchContests().then(r => setContests(r.data)).catch(() => {})
     loadFact()
   }, [])
@@ -258,7 +275,7 @@ export default function Dashboard() {
             <span className="badge badge-green">This Week</span>
           </div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={MOCK_WEEKLY}>
+            <AreaChart data={weeklyData}>
               <defs>
                 <linearGradient id="gGH" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#22C55E" stopOpacity={0.3}/>
