@@ -26,12 +26,87 @@ function ScoreRing({ score, color }) {
   )
 }
 
-const CATEGORIES = [
-  { key: 'dsa',           label: 'DSA & LeetCode',    max: 25, icon: '🧠', color: '#22C55E', bg: '#DCFCE7' },
-  { key: 'github',        label: 'GitHub Activity',   max: 25, icon: '💻', color: '#3B82F6', bg: '#EFF8FF' },
-  { key: 'communication', label: 'LinkedIn / Comm.',  max: 25, icon: '🤝', color: '#A855F7', bg: '#FAF5FF' },
-  { key: 'contests',      label: 'Contest Rating',    max: 25, icon: '🏆', color: '#EAB308', bg: '#FEF9C3' },
+// Role-specific category definitions — matches aiService.js schemas exactly
+const ROLE_CATEGORIES = {
+  'ML Engineer': [
+    { key: 'ml_knowledge',    label: 'ML Knowledge',       icon: '🧠', color: '#22C55E', bg: '#DCFCE7' },
+    { key: 'coding_python',   label: 'Coding / Python',    icon: '🐍', color: '#3B82F6', bg: '#EFF8FF' },
+    { key: 'research_kaggle', label: 'Research / Kaggle',  icon: '📊', color: '#A855F7', bg: '#FAF5FF' },
+    { key: 'math_depth',      label: 'Math Depth',         icon: '📐', color: '#EAB308', bg: '#FEF9C3' },
+  ],
+  'PM': [
+    { key: 'product_sense',   label: 'Product Sense',      icon: '💡', color: '#22C55E', bg: '#DCFCE7' },
+    { key: 'communication',   label: 'Communication',      icon: '🗣️', color: '#3B82F6', bg: '#EFF8FF' },
+    { key: 'analytical',      label: 'Analytical',         icon: '📈', color: '#A855F7', bg: '#FAF5FF' },
+    { key: 'behavioral',      label: 'Behavioral',         icon: '🤝', color: '#EAB308', bg: '#FEF9C3' },
+  ],
+  'Data Analyst': [
+    { key: 'sql_skills',      label: 'SQL Skills',         icon: '🗄️', color: '#22C55E', bg: '#DCFCE7' },
+    { key: 'statistics',      label: 'Statistics',         icon: '📊', color: '#3B82F6', bg: '#EFF8FF' },
+    { key: 'visualization',   label: 'Visualization',      icon: '📉', color: '#A855F7', bg: '#FAF5FF' },
+    { key: 'communication',   label: 'Communication',      icon: '🗣️', color: '#EAB308', bg: '#FEF9C3' },
+  ],
+  'DevOps': [
+    { key: 'infrastructure',  label: 'Infrastructure',     icon: '🏗️', color: '#22C55E', bg: '#DCFCE7' },
+    { key: 'automation_ci',   label: 'Automation / CI',    icon: '⚙️', color: '#3B82F6', bg: '#EFF8FF' },
+    { key: 'cloud_certs',     label: 'Cloud / Certs',      icon: '☁️', color: '#A855F7', bg: '#FAF5FF' },
+    { key: 'reliability',     label: 'Reliability / SRE',  icon: '🔧', color: '#EAB308', bg: '#FEF9C3' },
+  ],
+  'Frontend': [
+    { key: 'ui_ux_sense',     label: 'UI/UX Sense',        icon: '🎨', color: '#22C55E', bg: '#DCFCE7' },
+    { key: 'framework_depth', label: 'Framework Depth',    icon: '⚛️', color: '#3B82F6', bg: '#EFF8FF' },
+    { key: 'portfolio',       label: 'Portfolio',          icon: '💼', color: '#A855F7', bg: '#FAF5FF' },
+    { key: 'problem_solving', label: 'Problem Solving',    icon: '🧩', color: '#EAB308', bg: '#FEF9C3' },
+  ],
+}
+
+// Default for SWE / Backend / Full Stack
+const DEFAULT_CATEGORIES = [
+  { key: 'dsa',            label: 'DSA & LeetCode',   icon: '🧠', color: '#22C55E', bg: '#DCFCE7' },
+  { key: 'system_design',  label: 'System Design',    icon: '🏛️', color: '#3B82F6', bg: '#EFF8FF' },
+  { key: 'github_projects',label: 'GitHub Projects',  icon: '💻', color: '#A855F7', bg: '#FAF5FF' },
+  { key: 'consistency',    label: 'Consistency',      icon: '🔥', color: '#EAB308', bg: '#FEF9C3' },
 ]
+
+const HOW_IT_WORKS = {
+  'ML Engineer': {
+    ml_knowledge:    'ML concepts, architectures, frameworks inferred from LeetCode hard count and GitHub activity',
+    coding_python:   'LeetCode fluency + estimated Python/numpy proficiency from repo count',
+    research_kaggle: 'Estimated from GitHub project count and stars — conservative if limited data',
+    math_depth:      'Inferred from hard problem count and overall LeetCode depth',
+  },
+  'PM': {
+    product_sense:   'Inferred from GitHub activity as a proxy for technical curiosity',
+    communication:   'LinkedIn check-ins and activity logs this month',
+    analytical:      'LeetCode medium/hard count as analytical thinking signal',
+    behavioral:      'Estimated — limited signals available for PM behavioral assessment',
+  },
+  'Data Analyst': {
+    sql_skills:      'Inferred from LeetCode medium/hard — SQL-specific problems not directly detectable',
+    statistics:      'Estimated from analytical problem-solving signals in LeetCode',
+    visualization:   'GitHub public repo count and project quality',
+    communication:   'LinkedIn check-ins and activity logs',
+  },
+  'DevOps': {
+    infrastructure:  'System understanding inferred from GitHub contributions and repo complexity',
+    automation_ci:   'GitHub commit frequency and repo count as automation signal',
+    cloud_certs:     'Conservative estimate — cannot directly verify cloud certifications',
+    reliability:     'Inferred from GitHub consistency and contribution patterns',
+  },
+  'Frontend': {
+    ui_ux_sense:     'Inferred from GitHub stars and public repo count',
+    framework_depth: 'Estimated from LeetCode and GitHub activity patterns',
+    portfolio:       'GitHub public repos and stars as portfolio signal',
+    problem_solving: 'LeetCode performance — frontend-relevant algorithm patterns',
+  },
+}
+
+const DEFAULT_HOW_IT_WORKS = {
+  dsa:             'LeetCode solved count by difficulty, streak, acceptance rate',
+  system_design:   'Inferred from hard problem count and GitHub repo complexity',
+  github_projects: 'Contribution streak, repo quality, commit frequency, stars',
+  consistency:     'Combined GitHub + LeetCode streak and daily activity',
+}
 
 export default function ScorePage() {
   const settings       = useAppStore(s => s.settings)
@@ -42,25 +117,27 @@ export default function ScorePage() {
   const setScore       = useAppStore(s => s.setPlacementScore)
   const setInsight     = useAppStore(s => s.setWeeklyInsight)
   const setAlerts      = useAppStore(s => s.setAlerts)
-  const [loading, setLoading]       = useState(false)
+  const [loading, setLoading]         = useState(false)
   const [loadingStep, setLoadingStep] = useState('')
+
+  const role       = settings.role || 'SWE'
+  const categories = ROLE_CATEGORIES[role] || DEFAULT_CATEGORIES
+  const howItWorks = HOW_IT_WORKS[role]    || DEFAULT_HOW_IT_WORKS
 
   const generate = async () => {
     setLoading(true)
     try {
       const payload = {
-        role: settings.role,
-        github: githubData,
-        leetcode: leetcodeData,
+        role,
+        github:          githubData,
+        leetcode:        leetcodeData,
         targetCompanies: settings.targetCompanies,
       }
 
-      // Sequential calls — avoid simultaneous requests hitting free-tier 429
       setLoadingStep('Calculating score…')
       const scoreRes = await fetchScore(payload)
       setScore(scoreRes.data)
 
-      // Small gap between calls to respect rate limits
       await new Promise(res => setTimeout(res, 1000))
 
       setLoadingStep('Generating insight…')
@@ -93,7 +170,7 @@ export default function ScorePage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <div className="pill-badge" style={{ fontSize: 12 }}><span>AI-Powered · {settings.role}</span></div>
+          <div className="pill-badge" style={{ fontSize: 12 }}><span>AI-Powered · {role}</span></div>
         </div>
         <h2 style={{ letterSpacing: '-0.02em', marginBottom: 4 }}>🏆 Placement Readiness Score</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Role-specific evaluation across 4 dimensions</p>
@@ -131,9 +208,9 @@ export default function ScorePage() {
         {/* Breakdown */}
         <div style={{ flex: 1, minWidth: 280 }}>
           <h3 style={{ marginBottom: 22, letterSpacing: '-0.01em' }}>Category Breakdown</h3>
-          {CATEGORIES.map(({ key, label, max, icon, color: catColor, bg: catBg }) => {
+          {categories.map(({ key, label: catLabel, icon, color: catColor, bg: catBg }) => {
             const val = placementScore?.breakdown?.[key] ?? null
-            const pct = val !== null ? (val / max) * 100 : 0
+            const pct = val !== null ? (val / 25) * 100 : 0
             return (
               <div key={key} style={{ marginBottom: 16 }}>
                 <div className="flex-between" style={{ marginBottom: 6 }}>
@@ -144,7 +221,7 @@ export default function ScorePage() {
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 14
                     }}>{icon}</div>
-                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{label}</span>
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 600 }}>{catLabel}</span>
                   </div>
                   <span style={{
                     fontSize: 14, fontWeight: 800,
@@ -152,7 +229,7 @@ export default function ScorePage() {
                     fontFamily: 'var(--font-display)',
                     background: catBg, padding: '2px 10px',
                     borderRadius: 'var(--r-full)', border: '1.5px solid var(--border-light)'
-                  }}>{val ?? '?'}/{max}</span>
+                  }}>{val ?? '?'}/25</span>
                 </div>
                 <div className="progress-track">
                   <div className="progress-fill" style={{ width: `${pct}%`, background: catColor }} />
@@ -173,6 +250,22 @@ export default function ScorePage() {
         </div>
       </div>
 
+      {/* Data warning for non-SDE roles */}
+      {placementScore?.dataWarning && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '12px 16px',
+          background: '#FEF9C3',
+          border: '1.5px solid #EAB308',
+          borderRadius: 12,
+        }}>
+          <span style={{ fontSize: 16, flexShrink: 0 }}>⚠️</span>
+          <span style={{ fontSize: 13, color: '#92400E', lineHeight: 1.6 }}>
+            {placementScore.dataWarning}
+          </span>
+        </div>
+      )}
+
       {/* AI Advice */}
       {placementScore?.advice && (
         <div className="ai-card anim-fade-up">
@@ -186,7 +279,7 @@ export default function ScorePage() {
               <Zap size={16} color="var(--charcoal)" />
             </div>
             <h4 style={{ color: 'var(--cream)', letterSpacing: '-0.01em' }}>
-              AI Advice for {settings.role}
+              AI Advice for {role}
             </h4>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -206,11 +299,20 @@ export default function ScorePage() {
         </div>
       )}
 
-      {/* Weekly insight */}
+      {/* Weekly insight — full text, no truncation */}
       {weeklyInsight && (
         <div className="card card-teal anim-fade-up">
           <h4 style={{ marginBottom: 12, letterSpacing: '-0.01em' }}>📊 Weekly Insight</h4>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.75 }}>{weeklyInsight}</p>
+          <p style={{
+            fontSize: 14,
+            color: 'var(--text-secondary)',
+            lineHeight: 1.75,
+            whiteSpace: 'pre-wrap',
+            overflow: 'visible',
+            display: 'block',
+            WebkitLineClamp: 'unset',
+            WebkitBoxOrient: 'unset',
+          }}>{weeklyInsight}</p>
         </div>
       )}
 
@@ -218,7 +320,7 @@ export default function ScorePage() {
       <div className="card">
         <h4 style={{ marginBottom: 18, letterSpacing: '-0.01em' }}>How is the score calculated?</h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 14 }}>
-          {CATEGORIES.map(({ icon, label, max, color: catColor, bg: catBg, key }) => (
+          {categories.map(({ key, label: catLabel, icon, color: catColor, bg: catBg }) => (
             <div key={key} style={{
               padding: '16px 18px',
               background: catBg,
@@ -228,13 +330,10 @@ export default function ScorePage() {
             }}>
               <p style={{ fontSize: 22, marginBottom: 8 }}>{icon}</p>
               <p style={{ fontSize: 14, fontWeight: 700, color: 'var(--charcoal)', marginBottom: 4, fontFamily: 'var(--font-display)' }}>
-                {label} ({max}pts)
+                {catLabel} (25pts)
               </p>
               <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                {key === 'dsa' && 'LeetCode solved count by difficulty, streak, acceptance rate'}
-                {key === 'github' && 'Contribution streak, repo quality, commit frequency, stars'}
-                {key === 'communication' && 'Manual check-ins: posts, connections, applications sent'}
-                {key === 'contests' && 'Codeforces rating, LeetCode contest rank, participation count'}
+                {howItWorks[key] || ''}
               </p>
             </div>
           ))}

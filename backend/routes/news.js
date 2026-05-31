@@ -8,8 +8,11 @@ const cache = new Map()
 const TTL   = 60 * 60 * 1000  // 1 hour
 
 router.get('/', async (req, res) => {
-  const companies = (req.query.companies || '').split(',').map(s => s.trim()).filter(Boolean)
-  if (!companies.length) return res.json([])
+  const companies = Array.isArray(req.query.companies)
+    ? req.query.companies.map(s => s.trim()).filter(Boolean)
+    : (req.query.companies || '').split(',').map(s => s.trim()).filter(Boolean)
+
+  if (!companies.length) return res.status(400).json({ message: 'No companies provided' })
 
   const key = companies.sort().join(',')
   if (cache.has(key) && Date.now() - cache.get(key).ts < TTL) {
@@ -22,22 +25,27 @@ router.get('/', async (req, res) => {
     }
 
     const query = companies.join(' OR ')
-    const r = await axios.get('https://newsapi.org/v2/everything', {
+    const r = await axios.get('https://newsdata.io/api/1/news', {
       params: {
+        apikey: process.env.NEWS_API_KEY,
         q: query,
-        sortBy: 'publishedAt',
-        pageSize: 20,
         language: 'en',
-        apiKey: process.env.NEWS_API_KEY,
+        category: 'technology,business',
       }
     })
 
-    let articles = r.data.articles || []
-
-    // Tag each article with matching company
-    articles = articles.map(a => {
-      const co = companies.find(c => (a.title + a.description || '').toLowerCase().includes(c.toLowerCase()))
-      return { ...a, company: co || companies[0] }
+    let articles = (r.data.results || []).map(a => {
+      const co = companies.find(c =>
+        (a.title + ' ' + (a.description || '')).toLowerCase().includes(c.toLowerCase())
+      )
+      return {
+        title:       a.title,
+        description: a.description || '',
+        url:         a.link,
+        publishedAt: a.pubDate,
+        source:      { name: a.source_id },
+        company:     co || companies[0],
+      }
     })
 
     // AI relevance filter
@@ -52,7 +60,7 @@ router.get('/', async (req, res) => {
     cache.set(key, { ts: Date.now(), data: articles })
     res.json(articles)
   } catch (err) {
-    console.error('News error:', err.message)
+    console.error('News error:', err.response?.data || err.message)
     res.json(MOCK_NEWS(companies))
   }
 })

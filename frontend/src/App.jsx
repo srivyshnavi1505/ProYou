@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast'
 import { useAppStore } from './store/useAppStore'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import Dashboard from './pages/Dashboard'
 import StreakPage from './pages/StreakPage'
 import ScorePage from './pages/ScorePage'
@@ -43,7 +44,8 @@ export default function App() {
         }}
       />
       <Routes>
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login"          element={<LoginPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/*"
           element={

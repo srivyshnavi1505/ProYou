@@ -83,21 +83,35 @@ const DEFAULT_SCORE_SCHEMA = {
 }
 
 // ── Placement Score ───────────────────────────────────────
-async function generatePlacementScore({ role, github, leetcode, targetCompanies }) {
+async function generatePlacementScore({ role, github, leetcode, targetCompanies, linkedinActivity }) {
   const schema = ROLE_SCORE_SCHEMA[role] || DEFAULT_SCORE_SCHEMA
   const categoryKeys = Object.keys(schema.categories)
   const categorySchema = categoryKeys.map(k => `"${k}": <number 0-25>`).join(',\n    ')
 
-  const systemPrompt = 'You are a placement readiness evaluator for tech companies. Return ONLY valid JSON matching the exact schema requested.'
+  // What data we actually have vs what we're estimating
+  const dataAvailability = {
+    'ML Engineer':    'NOTE: You only have GitHub + LeetCode data. Infer ml_knowledge from hard problem count and repo activity. Mark research_kaggle as estimated — be conservative if data is thin.',
+    'PM':             'NOTE: You have very limited signals for a PM role. GitHub activity proxies technical curiosity. LeetCode proxies analytical thinking. Be honest — cap scores at 15/25 for categories you cannot verify. Do NOT inflate.',
+    'Data Analyst':   'NOTE: You cannot detect SQL-specific LeetCode problems. Treat medium/hard LeetCode as analytical signal. Be conservative on sql_skills if total solved is low.',
+    'DevOps':         'NOTE: You cannot see GitHub Actions usage or cloud certs. Infer automation_ci from contribution frequency and repo count. Cap cloud_certs at 10/25 unless repos suggest otherwise.',
+    'Frontend':       'NOTE: You cannot see repo names or UI projects directly. Infer portfolio quality from public repo count and stars. Be conservative.',
+  }[role] || ''
+
+  const systemPrompt = `You are a placement readiness evaluator for tech companies. Return ONLY valid JSON matching the exact schema requested.
+Be honest about data limitations — do not inflate scores for categories where you lack real signal.
+If data is insufficient for a category, score conservatively (10-15 range) and mention it in advice.`
 
   const userPrompt = `Score this ${role} candidate out of 100 (25 pts each category) targeting: ${(targetCompanies || []).join(', ') || 'top tech companies'}.
 
 Candidate Data:
-- GitHub streak: ${github?.streak ?? 0} days, ${github?.totalContributions ?? 0} contributions, ${github?.publicRepos ?? 0} public repos
+- GitHub streak: ${github?.streak ?? 0} days, ${github?.totalContributions ?? 0} contributions, ${github?.publicRepos ?? 0} public repos, ${github?.stars ?? 0} stars
 - LeetCode: ${leetcode?.easySolved ?? 0} Easy, ${leetcode?.mediumSolved ?? 0} Medium, ${leetcode?.hardSolved ?? 0} Hard solved. Streak: ${leetcode?.streak ?? 0} days
+- LinkedIn activity logs this month: ${linkedinActivity ?? 'not provided'}
 
 Scoring guidance for ${role}:
 ${schema.guidance}
+
+${dataAvailability}
 
 Return a JSON object with EXACTLY this schema:
 {
@@ -105,10 +119,11 @@ Return a JSON object with EXACTLY this schema:
   "breakdown": {
     ${categorySchema}
   },
-  "advice": [<role-specific tip 1>, <role-specific tip 2>, <role-specific tip 3>]
+  "advice": [<role-specific tip 1>, <role-specific tip 2>, <role-specific tip 3>],
+  "dataWarning": "<one sentence about what data was missing or estimated, or null if SWE/Backend/FullStack>"
 }
 
-Advice must be specific to a ${role} interview process, not generic LeetCode grind advice.`
+Advice must be specific to a ${role} interview process. If scores were capped due to missing data, the advice should tell the user what to do to improve those signals.`
 
   return callGroq(systemPrompt, userPrompt, true)
 }

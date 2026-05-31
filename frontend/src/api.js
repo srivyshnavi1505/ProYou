@@ -24,6 +24,12 @@ export const getMe = () =>
 export const updateProfile = (data) =>
   axios.patch(`${BASE}/auth/profile`, data, { headers: authHeaders() })
 
+export const forgotPassword = (email) =>
+  axios.post(`${BASE}/auth/forgot-password`, { email })
+
+export const resetPassword = (token, password) =>
+  axios.post(`${BASE}/auth/reset-password`, { token, password })
+
 // ── GitHub ───────────────────────────────────────────────────────────────────
 export const fetchGithub = (username) =>
   axios.get(`${BASE}/github/${username}`)

@@ -7,51 +7,81 @@ import {
   generateEmailDigest,
 } from '../services/aiService.js'
 import { sendDigest } from '../services/emailService.js'
+import { requireAuth } from '../middleware/auth.js'
+import User from '../models/User.js'
 
 const router = express.Router()
 
-// Score
+router.use(requireAuth)
+
+//Placement Score 
 router.post('/score', async (req, res) => {
   try {
-    const result = await generatePlacementScore(req.body)
+    // Fetch LinkedIn activity count for this user to feed into score
+    const LinkedInLog = (await import('../models/LinkedInLog.js')).default
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    const linkedinActivity = await LinkedInLog.countDocuments({
+      userId: req.userId,
+      createdAt: { $gte: thirtyDaysAgo }
+    }).catch(() => null)
+
+    const result = await generatePlacementScore({ ...req.body, linkedinActivity })
+
+    User.findByIdAndUpdate(req.userId, {
+      $set: {
+        lastPlacementScore: {
+          total:       result.total,
+          breakdown:   result.breakdown,
+          advice:      result.advice,
+          dataWarning: result.dataWarning,
+          generatedAt: new Date(),
+        },
+      },
+    }).catch(err => console.warn('[AI] Could not persist score to DB:', err.message))
+
     res.json(result)
   } catch (err) {
     console.error('AI score error:', err.message)
-    res.status(500).json({ message: err.message })
+    const status = err?.status === 429 ? 429 : 500
+    res.status(status).json({ message: err.message })
   }
 })
 
-// Weekly insight
+
+// ── Weekly Insight 
 router.post('/insight', async (req, res) => {
   try {
     const insight = await generateWeeklyInsight(req.body)
     res.json({ insight })
   } catch (err) {
-    res.status(500).json({ message: err.message })
+    const status = err?.status === 429 ? 429 : 500
+    res.status(status).json({ message: err.message })
   }
 })
 
-// Flashcards
+// ── Flashcards ────────────────────────────────────────────────────────────────
 router.post('/flashcards', async (req, res) => {
   try {
     const cards = await generateFlashcards(req.body)
     res.json(Array.isArray(cards) ? cards : [])
   } catch (err) {
-    res.status(500).json({ message: err.message })
+    const status = err?.status === 429 ? 429 : 500
+    res.status(status).json({ message: err.message })
   }
 })
 
-// LeetCode AI tutor
+// ── AI Tutor ──────────────────────────────────────────────────────────────────
 router.post('/tutor', async (req, res) => {
   try {
     const reply = await tutorResponse(req.body)
     res.json({ reply })
   } catch (err) {
-    res.status(500).json({ message: err.message })
+    const status = err?.status === 429 ? 429 : 500
+    res.status(status).json({ message: err.message })
   }
 })
 
-// Trigger weekly email digest
+// ── Weekly Email Digest ───────────────────────────────────────────────────────
 router.post('/email-digest', async (req, res) => {
   try {
     const { user, github, leetcode, score, contests, email } = req.body
