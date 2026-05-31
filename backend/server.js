@@ -56,5 +56,6 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ message: err.message || 'Server error' })
 })
 
+
 const PORT = process.env.PORT || 3001
 app.listen(PORT, () => console.log(`🚀 ProYou backend running on http://localhost:${PORT}`))
