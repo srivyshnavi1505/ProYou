@@ -6,12 +6,29 @@ import toast from 'react-hot-toast'
 
 const ROLES = ['SWE','ML Engineer','PM','Data Analyst','DevOps','Frontend','Backend','Full Stack']
 
+const Section = ({ icon: Icon, title, children }) => (
+  <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
+      <Icon size={18} style={{ color: 'var(--teal)' }} />
+      <h3 style={{ fontSize: '1rem' }}>{title}</h3>
+    </div>
+    {children}
+  </div>
+)
+
+const Field = ({ label, children }) => (
+  <div>
+    <label style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>{label}</label>
+    {children}
+  </div>
+)
+
 export default function SettingsPage() {
   const settings       = useAppStore(s => s.settings)
   const user           = useAppStore(s => s.user)
   const updateSettings = useAppStore(s => s.updateSettings)
-  const [local, setLocal]       = useState({ ...settings })
-  const [saved, setSaved]       = useState(false)
+  const [local, setLocal] = useState({ ...settings })
+  const [saved, setSaved] = useState(false)
   const [saveLoading, setSaveLoading] = useState(false)
   const [mailLoading, setMailLoading] = useState(false)
 
@@ -29,29 +46,24 @@ export default function SettingsPage() {
     }
   }
 
-  const sendDigest = async () => {
-    setMailLoading(true)
-    try { await triggerDigest(); toast.success('Weekly digest sent to your email! 📧') }
-    catch { toast.error('Email failed — check Resend API key in backend') }
-    finally { setMailLoading(false) }
+const sendDigest = async () => {
+  setMailLoading(true)
+  try {
+    await triggerDigest({
+      email: local.email,
+      user: { name: user?.name },
+      github: null,   // backend will handle missing data gracefully
+      leetcode: null,
+      score: null,
+      contests: [],
+    })
+    toast.success('Weekly digest sent to your email! 📧')
+  } catch {
+    toast.error('Email failed — check GMAIL_USER / GMAIL_PASS in Render env vars')
+  } finally {
+    setMailLoading(false)
   }
-
-  const Section = ({ icon: Icon, title, children }) => (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
-        <Icon size={18} style={{ color: 'var(--teal)' }} />
-        <h3 style={{ fontSize: '1rem' }}>{title}</h3>
-      </div>
-      {children}
-    </div>
-  )
-
-  const Field = ({ label, children }) => (
-    <div>
-      <label style={{ fontSize: 13, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>{label}</label>
-      {children}
-    </div>
-  )
+}
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24, maxWidth: 700 }}>
