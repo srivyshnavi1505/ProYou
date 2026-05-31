@@ -82,17 +82,23 @@ router.post('/tutor', async (req, res) => {
 })
 
 // ── Weekly Email Digest ───────────────────────────────────────────────────────
+
 router.post('/email-digest', async (req, res) => {
   try {
     const { user, github, leetcode, score, contests, email } = req.body
+    console.log('[Digest] Starting for email:', email)
+    
     const body = await generateEmailDigest({ user, github, leetcode, score, contests })
+    console.log('[Digest] AI generated, sending email...')
+    
     if (email) {
       await sendDigest(email, body)
+      console.log('[Digest] Email sent!')
     }
     res.json({ message: 'Digest sent', body })
   } catch (err) {
+    console.error('[Digest] ERROR:', err.message, err.stack)
     res.status(500).json({ message: err.message })
   }
 })
-
 export default router
