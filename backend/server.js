@@ -27,16 +27,15 @@ import { globalLimit, authLimit, aiLimit, publicLimit } from './middleware/rateL
 // Cron jobs
 import './cron/scheduler.js'
 
-// ── MongoDB Atlas connection ──────────────────────────────
 const MONGO_URI = process.env.MONGODB_URI
 if (!MONGO_URI) {
-  console.error('❌  MONGODB_URI is not set in .env — please add it and restart.')
+  console.error('  MONGODB_URI is not set in .env — please add it and restart.')
   process.exit(1)
 }
 
 mongoose.connect(MONGO_URI)
-  .then(() => console.log('✅  MongoDB Atlas connected'))
-  .catch(err => { console.error('❌  MongoDB connection error:', err.message); process.exit(1) })
+  .then(() => console.log(' MongoDB Atlas connected'))
+  .catch(err => { console.error('  MongoDB connection error:', err.message); process.exit(1) })
 
 const app = express()
 
@@ -69,4 +68,4 @@ app.use((err, req, res, next) => {
 
 
 const PORT = process.env.PORT || 3001
-app.listen(PORT, () => console.log(`🚀 ProYou backend running on http://localhost:${PORT}`))
+app.listen(PORT, () => console.log(` ProYou backend running on http://localhost:${PORT}`))
