@@ -11,7 +11,7 @@ export async function fetchContests() {
   try {
     const r = await axios.post('https://leetcode.com/graphql', {
       query: `{ upcomingContests { title startTime duration } }`
-    }, { headers: { 'Content-Type': 'application/json', Referer: 'https://leetcode.com' } })
+    }, { headers: { 'Content-Type': 'application/json', Referer: 'https://leetcode.com' }, timeout: 10000 })
 
     const lc = r.data?.data?.upcomingContests || []
     lc.forEach(c => results.push({
@@ -25,7 +25,7 @@ export async function fetchContests() {
 
   // Codeforces
   try {
-    const r  = await axios.get('https://codeforces.com/api/contest.list?gym=false')
+    const r  = await axios.get('https://codeforces.com/api/contest.list?gym=false', { timeout: 10000 })
     const cf = (r.data?.result || []).filter(c => c.phase === 'BEFORE').slice(0, 5)
     cf.forEach(c => results.push({
       name:      c.name,

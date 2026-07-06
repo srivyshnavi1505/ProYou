@@ -1,11 +1,12 @@
 import express from 'express'
 import axios   from 'axios'
 import { filterNewsRelevance } from '../services/aiService.js'
+import { BoundedCache } from '../services/boundedCache.js'
 
 const router = express.Router()
 
-const cache = new Map()
-const TTL   = 60 * 60 * 1000  // 1 hour
+// Bounded cache — max 200 unique query combinations, 1h TTL
+const cache = new BoundedCache(200, 60 * 60 * 1000)
 
 router.get('/', async (req, res) => {
   const companies = Array.isArray(req.query.companies)
@@ -15,9 +16,8 @@ router.get('/', async (req, res) => {
   if (!companies.length) return res.status(400).json({ message: 'No companies provided' })
 
   const key = companies.sort().join(',')
-  if (cache.has(key) && Date.now() - cache.get(key).ts < TTL) {
-    return res.json(cache.get(key).data)
-  }
+  const cached = cache.get(key)
+  if (cached) return res.json(cached)
 
   try {
     if (!process.env.NEWS_API_KEY) {
@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
       }).filter(a => a.relevance !== 'low')
     }
 
-    cache.set(key, { ts: Date.now(), data: articles })
+    cache.set(key, articles)
     res.json(articles)
   } catch (err) {
     console.error('News error:', err.response?.data || err.message)

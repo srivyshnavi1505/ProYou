@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change_me_in_production'
+const JWT_SECRET = process.env.JWT_SECRET
 
 /**
  * Express middleware that validates a Bearer JWT.

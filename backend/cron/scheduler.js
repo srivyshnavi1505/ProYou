@@ -9,6 +9,7 @@
  */
 
 import cron  from 'node-cron'
+import pLimit from 'p-limit'
 import User  from '../models/User.js'
 import { fetchGithubData }               from '../services/githubService.js'
 import { fetchLeetcodeData }             from '../services/leetcodeService.js'
@@ -59,11 +60,15 @@ cron.schedule('0 20 * * *', async () => {
       .select('email githubUsername leetcodeUsername')
       .lean()
 
-    for (const u of users) {
+    // Concurrency cap: at most 8 users fetched simultaneously.
+    // Prevents GitHub rate-limit bursts when many users have set usernames.
+    const limit = pLimit(8)
+
+    await Promise.all(users.map(u => limit(async () => {
       try {
         const [github, leetcode] = await Promise.all([
-          u.githubUsername  ? fetchGithubData(u.githubUsername).catch(() => null)   : null,
-          u.leetcodeUsername? fetchLeetcodeData(u.leetcodeUsername).catch(() => null): null,
+          u.githubUsername   ? fetchGithubData(u.githubUsername).catch(() => null)    : null,
+          u.leetcodeUsername ? fetchLeetcodeData(u.leetcodeUsername).catch(() => null) : null,
         ])
 
         const ghThis  = commitsInLastNDays(github?.contributions,  7)
@@ -71,31 +76,32 @@ cron.schedule('0 20 * * *', async () => {
         const lcThis  = lcSubmissionsInLastNDays(leetcode?.calendar,  7)
         const lcPrior = lcSubmissionsInLastNDays(leetcode?.calendar, 14) - lcThis
 
-        const ghDrop  = ghPrior  > 0 && ghThis  < ghPrior  * 0.8
-        const lcDrop  = lcPrior  > 0 && lcThis  < lcPrior  * 0.8
+        const ghDrop     = ghPrior > 0 && ghThis < ghPrior * 0.8
+        const lcDrop     = lcPrior > 0 && lcThis < lcPrior * 0.8
         const noActivity = (ghThis === 0 && lcThis === 0)
 
         if (ghDrop || lcDrop || noActivity) {
           const lines = []
-          if (noActivity)    lines.push('No GitHub commits or LeetCode submissions this week.')
+          if (noActivity) lines.push('No GitHub commits or LeetCode submissions this week.')
           else {
-            if (ghDrop) lines.push(`GitHub commits dropped from ${ghPrior} → ${ghThis} (${Math.round((1-ghThis/ghPrior)*100)}% drop).`)
-            if (lcDrop) lines.push(`LeetCode submissions dropped from ${lcPrior} → ${lcThis} (${Math.round((1-lcThis/lcPrior)*100)}% drop).`)
+            if (ghDrop) lines.push(`GitHub commits dropped from ${ghPrior} → ${ghThis} (${Math.round((1 - ghThis / ghPrior) * 100)}% drop).`)
+            if (lcDrop) lines.push(`LeetCode submissions dropped from ${lcPrior} → ${lcThis} (${Math.round((1 - lcThis / lcPrior) * 100)}% drop).`)
           }
           lines.push('Log in to ProYou to get back on track! 🚀')
 
-        await sendProductivityAlert(u.email, lines.join('\n'), u.name || 'Coder').catch(() => null)
+          await sendProductivityAlert(u.email, lines.join('\n'), u.name || 'Coder').catch(() => null)
           console.log(`[CRON] Productivity alert → ${u.email}`)
         }
       } catch (userErr) {
         console.warn(`[CRON] Productivity skip (${u.email}):`, userErr.message)
       }
-    }
+    })))
   } catch (err) { await alertAdmin('ProductivityCheck', err) }
 }, { timezone: TIMEZONE })
 
 
-// ── Job 2 — Monday 7 AM: Weekly Digest ────────────────────────────────────────
+
+// ── Job 2 — Monday 7 AM: Weekly Digest ──────────────────────────────────────────
 // Uses cached lastPlacementScore if <7 days old to avoid burning Groq quota
 cron.schedule('0 7 * * 1', async () => {
   console.log('[CRON] Weekly digest running…')
@@ -110,16 +116,21 @@ cron.schedule('0 7 * * 1', async () => {
     let contests = []
     try { contests = await fetchContests() } catch { /* non-fatal */ }
 
-    for (const u of users) {
+    // Concurrency cap: at most 8 users processed simultaneously.
+    // Each slot does 2 external HTTP fetches + 1 Groq call, so 8 keeps
+    // us well within both GitHub rate limits and Groq token budgets.
+    const limit = pLimit(8)
+
+    await Promise.all(users.map(u => limit(async () => {
       try {
         const [github, leetcode] = await Promise.all([
-          u.githubUsername  ? fetchGithubData(u.githubUsername).catch(() => null)   : null,
-          u.leetcodeUsername? fetchLeetcodeData(u.leetcodeUsername).catch(() => null): null,
+          u.githubUsername   ? fetchGithubData(u.githubUsername).catch(() => null)    : null,
+          u.leetcodeUsername ? fetchLeetcodeData(u.leetcodeUsername).catch(() => null) : null,
         ])
 
         // Use cached score if it was generated within the last 7 days
-        const cachedScore     = u.lastPlacementScore
-        const cacheIsFresh    = cachedScore?.generatedAt && new Date(cachedScore.generatedAt) > weekAgo
+        const cachedScore  = u.lastPlacementScore
+        const cacheIsFresh = cachedScore?.generatedAt && new Date(cachedScore.generatedAt) > weekAgo
         const score = cacheIsFresh
           ? cachedScore
           : await generatePlacementScore({
@@ -142,15 +153,18 @@ cron.schedule('0 7 * * 1', async () => {
       } catch (userErr) {
         console.warn(`[CRON] Digest skip (${u.email}):`, userErr.message)
       }
-    }
+    })))
   } catch (err) { await alertAdmin('WeeklyDigest', err) }
 }, { timezone: TIMEZONE })
 
 
 // ── Job 3 — Daily 9 AM: Contest Reminders ─────────────────────────────────────
-// Deduped per user+contest using an in-process Set (resets on server restart,
-// which is acceptable — the 24h window means at most one fire per contest anyway)
-const sentReminders = new Set()   // key: `${userId}:${contestName}:${dateStr}`
+// Deduped per user+contest using a bounded cache (resets on server restart,
+// which is acceptable — the 24h window means at most one fire per contest anyway).
+// Max 5000 keys with a 48h TTL ensures dedup across two daily runs while
+// preventing unbounded memory growth.
+import { BoundedCache } from '../services/boundedCache.js'
+const sentReminders = new BoundedCache(5000, 48 * 60 * 60 * 1000)
 
 cron.schedule('0 9 * * *', async () => {
   console.log('[CRON] Contest reminder check…')
@@ -175,7 +189,7 @@ cron.schedule('0 9 * * *', async () => {
         if (sentReminders.has(key)) continue
 
         await sendContestReminder(u.email, c, u.name || 'Coder').catch(() => null)
-        sentReminders.add(key)
+        sentReminders.set(key, true)
         console.log(`[CRON] Contest reminder → ${u.email} | ${c.name}`)
       }
     }

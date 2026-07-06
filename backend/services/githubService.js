@@ -14,9 +14,9 @@ export async function fetchGithubData(username) {
 
   const headers = GITHUB_HEADERS()
   const [userRes, eventsRes, reposRes] = await Promise.all([
-    axios.get(`https://api.github.com/users/${username}`, { headers }),
-    axios.get(`https://api.github.com/users/${username}/events/public?per_page=100`, { headers }),
-    axios.get(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers }),
+    axios.get(`https://api.github.com/users/${username}`, { headers, timeout: 10000 }),
+    axios.get(`https://api.github.com/users/${username}/events/public?per_page=100`, { headers, timeout: 10000 }),
+    axios.get(`https://api.github.com/users/${username}/repos?per_page=100&sort=updated`, { headers, timeout: 10000 }),
   ])
 
   const user   = userRes.data

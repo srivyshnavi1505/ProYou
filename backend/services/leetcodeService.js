@@ -53,6 +53,7 @@ export async function fetchLeetcodeData(username) {
       'Referer':      'https://leetcode.com',
       'User-Agent':   'Mozilla/5.0',
     },
+    timeout: 10000,
   })
 
   if (r.data?.errors) throw new Error('LeetCode user not found or profile is private')

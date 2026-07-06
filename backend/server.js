@@ -1,4 +1,11 @@
 import 'dotenv/config'
+
+// ── Fail-fast: critical env vars ──────────────────────────
+if (!process.env.JWT_SECRET) {
+  console.error('❌  JWT_SECRET is not set in .env — refusing to start with an insecure default.')
+  process.exit(1)
+}
+
 import express   from 'express'
 import cors      from 'cors'
 import morgan    from 'morgan'
@@ -14,6 +21,7 @@ import contestRoutes  from './routes/contests.js'
 import eventRoutes    from './routes/events.js'
 import linkedinRoutes from './routes/linkedin.js'
 import factRoutes     from './routes/facts.js'
+import { globalLimit, authLimit, aiLimit, publicLimit } from './middleware/rateLimiter.js'
 
 
 // Cron jobs
@@ -37,16 +45,19 @@ app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', cred
 app.use(morgan('dev'))
 app.use(express.json())
 
-// Routes
-app.use('/api/auth',     authRoutes)
-app.use('/api/github',   githubRoutes)
-app.use('/api/leetcode', leetcodeRoutes)
-app.use('/api/ai',       aiRoutes)
+// Global catch-all rate limit
+app.use(globalLimit)
+
+// Routes — each group gets the appropriate rate-limit tier
+app.use('/api/auth',     authLimit,   authRoutes)
+app.use('/api/ai',       aiLimit,     aiRoutes)
+app.use('/api/github',   publicLimit, githubRoutes)
+app.use('/api/leetcode', publicLimit, leetcodeRoutes)
+app.use('/api/facts',    publicLimit, factRoutes)
+app.use('/api/contests', publicLimit, contestRoutes)
 app.use('/api/news',     newsRoutes)
-app.use('/api/contests', contestRoutes)
 app.use('/api/events',   eventRoutes)
 app.use('/api/linkedin', linkedinRoutes)
-app.use('/api/facts',    factRoutes)
 
 app.get('/api/health', (_, res) => res.json({ status: 'ok', time: new Date() }))
 

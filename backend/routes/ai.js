@@ -7,8 +7,11 @@ import {
   generateEmailDigest,
 } from '../services/aiService.js'
 import { sendDigest } from '../services/emailService.js'
+import { fetchGithubData }   from '../services/githubService.js'
+import { fetchLeetcodeData } from '../services/leetcodeService.js'
 import { requireAuth } from '../middleware/auth.js'
 import User from '../models/User.js'
+import LinkedInLog from '../models/LinkedInLog.js'
 
 const router = express.Router()
 
@@ -17,15 +20,39 @@ router.use(requireAuth)
 //Placement Score 
 router.post('/score', async (req, res) => {
   try {
+    // ── Server is the source of truth ─────────────────────────────────
+    // Fetch the authenticated user's profile to get their *real* usernames
+    // and role. Client-submitted stats (github, leetcode) are ignored.
+    const user = await User.findById(req.userId)
+      .select('githubUsername leetcodeUsername role targetCompanies')
+      .lean()
+    if (!user) return res.status(404).json({ message: 'User not found' })
+
+    // Re-fetch real data server-side — never trust client payloads
+    const [github, leetcode] = await Promise.all([
+      user.githubUsername
+        ? fetchGithubData(user.githubUsername).catch(() => null)
+        : Promise.resolve(null),
+      user.leetcodeUsername
+        ? fetchLeetcodeData(user.leetcodeUsername).catch(() => null)
+        : Promise.resolve(null),
+    ])
+
     // Fetch LinkedIn activity count for this user to feed into score
-    const LinkedInLog = (await import('../models/LinkedInLog.js')).default
+    // LinkedInLog is imported at the top of the file
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const linkedinActivity = await LinkedInLog.countDocuments({
       userId: req.userId,
       createdAt: { $gte: thirtyDaysAgo }
     }).catch(() => null)
 
-    const result = await generatePlacementScore({ ...req.body, linkedinActivity })
+    const result = await generatePlacementScore({
+      role:            user.role || 'SWE',
+      github,
+      leetcode,
+      targetCompanies: user.targetCompanies || [],
+      linkedinActivity,
+    })
 
     User.findByIdAndUpdate(req.userId, {
       $set: {
@@ -82,17 +109,22 @@ router.post('/tutor', async (req, res) => {
 })
 
 // ── Weekly Email Digest ───────────────────────────────────────────────────────
+// SECURITY: Email is taken from the JWT (req.userEmail), NOT from the request
+// body. This prevents authenticated users from using the endpoint as a
+// spam/phishing relay by specifying an arbitrary recipient address.
 
 router.post('/email-digest', async (req, res) => {
   try {
-    const { user, github, leetcode, score, contests, email } = req.body
-    console.log('[Digest] Starting for email:', email)
+    const { user, github, leetcode, score, contests } = req.body
+    const recipientEmail = req.userEmail  // from JWT — never trust req.body
+
+    console.log('[Digest] Starting for email:', recipientEmail)
     
     const body = await generateEmailDigest({ user, github, leetcode, score, contests })
     console.log('[Digest] AI generated, sending email...')
     
-    if (email) {
-      await sendDigest(email, body)
+    if (recipientEmail) {
+      await sendDigest(recipientEmail, body)
       console.log('[Digest] Email sent!')
     }
     res.json({ message: 'Digest sent', body })

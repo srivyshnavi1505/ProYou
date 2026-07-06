@@ -17,6 +17,18 @@ function getTransporter() {
 const FROM         = () => process.env.EMAIL_FROM || `ProYou <${process.env.GMAIL_USER}>`
 const DASHBOARD    = () => process.env.FRONTEND_URL || 'http://localhost:5173'
 
+// ── HTML escape ───────────────────────────────────────────────────────────────
+// Apply to any value sourced from LLM output or user-controlled fields before
+// it is interpolated directly into an HTML string.
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // ── Shared HTML helpers ───────────────────────────────────────────────────────
 const emailWrapper = (content) => `
 <!DOCTYPE html>
@@ -80,7 +92,7 @@ async function sendDigest(to, body, userName = 'Coder') {
       📊 Weekly Digest · ${dateLabel}
     </p>
     <h2 style="margin:0 0 8px;font-size:24px;font-weight:800;color:#fff1e6;letter-spacing:-0.5px;">
-      Your week in review, ${userName} 👋
+      Your week in review, ${escapeHtml(userName)} 👋
     </h2>
     <p style="color:rgba(255,241,230,0.55);font-size:14px;margin:0 0 24px;line-height:1.6;">
       Here's your personalized AI-drafted placement summary.
@@ -88,7 +100,7 @@ async function sendDigest(to, body, userName = 'Coder') {
     ${divider}
     <div style="background:#0f0f1a;border-radius:12px;padding:20px 22px;border:1px solid rgba(255,255,255,0.05);">
       <pre style="white-space:pre-wrap;font-family:'Segoe UI',Arial,sans-serif;font-size:14px;
-                  line-height:1.8;color:rgba(255,241,230,0.85);margin:0;">${body}</pre>
+                  line-height:1.8;color:rgba(255,241,230,0.85);margin:0;">${escapeHtml(body)}</pre>
     </div>
     ${divider}
     <p style="font-size:13px;color:rgba(255,241,230,0.45);margin:0;line-height:1.7;">
@@ -116,20 +128,20 @@ async function sendContestReminder(to, contest, userName = 'Coder') {
 
   const content = `
     <p style="font-size:13px;color:${platformColor};font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin:0 0 12px;">
-      ⭐ Contest Reminder · ${contest.platform}
+      ⭐ Contest Reminder · ${escapeHtml(contest.platform)}
     </p>
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#fff1e6;letter-spacing:-0.5px;">
-      ${contest.name}
+      ${escapeHtml(contest.name)}
     </h2>
     <p style="color:rgba(255,241,230,0.55);font-size:14px;margin:0 0 24px;">
-      Hey ${userName}, this contest starts in ~24 hours. Register now!
+      Hey ${escapeHtml(userName)}, this contest starts in ~24 hours. Register now!
     </p>
     ${divider}
     <table style="width:100%;border-collapse:collapse;">
       ${[
         ['📅 Date & Time', startIST + ' IST'],
         ['⏱ Duration', contest.duration],
-        ['🏆 Platform', contest.platform],
+        ['🏆 Platform', escapeHtml(contest.platform)],
       ].map(([label, val]) => `
         <tr>
           <td style="padding:10px 0;font-size:13px;color:rgba(255,241,230,0.45);width:130px;">${label}</td>
@@ -142,9 +154,9 @@ async function sendContestReminder(to, contest, userName = 'Coder') {
 
   await sendMail(
     to,
-    `⭐ Contest in 24h: ${contest.name} (${contest.platform})`,
+    `⭐ Contest in 24h: ${escapeHtml(contest.name)} (${escapeHtml(contest.platform)})`,
     emailWrapper(content),
-    `Contest tomorrow: ${contest.name}\nStart: ${startIST} IST\nDuration: ${contest.duration}\nLink: ${contest.url}`
+    `Contest tomorrow: ${escapeHtml(contest.name)}\nStart: ${startIST} IST\nDuration: ${escapeHtml(contest.duration)}\nLink: ${contest.url}`
   )
 }
 
@@ -158,7 +170,7 @@ async function sendProductivityAlert(to, message, userName = 'Coder') {
       ⚠️ Productivity Alert
     </p>
     <h2 style="margin:0 0 8px;font-size:22px;font-weight:800;color:#fff1e6;letter-spacing:-0.5px;">
-      Hey ${userName}, your activity dipped this week
+      Hey ${escapeHtml(userName)}, your activity dipped this week
     </h2>
     <p style="color:rgba(255,241,230,0.55);font-size:14px;margin:0 0 24px;">
       We noticed a drop in your coding consistency. Here's the breakdown:
@@ -168,7 +180,7 @@ async function sendProductivityAlert(to, message, userName = 'Coder') {
       ${lines.map(line => `
         <div style="background:#0f0f1a;border-radius:10px;padding:14px 18px;
                     border-left:3px solid #f87171;font-size:14px;color:rgba(255,241,230,0.8);">
-          ${line}
+          ${escapeHtml(line)}
         </div>
       `).join('')}
     </div>

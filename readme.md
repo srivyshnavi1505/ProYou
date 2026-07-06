@@ -2,7 +2,7 @@
 
 A full-stack AI-powered dashboard that tracks your coding activity, scores your placement readiness, and sends automated weekly digests — built for students targeting SDE, ML, PM, and other tech roles.
 
-![ProYou Dashboard](https://img.shields.io/badge/Status-Active-22C55E?style=flat-square) ![Node](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=node.js) ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb)
+![ProYou Dashboard](https://img.shields.io/badge/Status-Active-22C55E?style=flat-square) ![Node](https://img.shields.io/badge/Node.js-22-339933?style=flat-square&logo=node.js) ![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react) ![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=flat-square&logo=mongodb)
 
 ---
 
@@ -20,19 +20,21 @@ A full-stack AI-powered dashboard that tracks your coding activity, scores your 
 | 📧 Weekly Digest | Automated Monday 7AM email with your week summary and action items |
 | ⚠️ Productivity Alerts | Daily check — emails you if activity drops >20% vs previous week |
 | 🔐 Auth | Email/password + Google OAuth, JWT, password reset via email |
+| 🛡️ Security | Robust rate limiting, Helmet, JWT token validation, and input sanitization |
 
 ---
 
 ## Tech Stack
 
 **Frontend**
-- React 18 + Vite
+- React 19 + Vite
+- Tailwind CSS v4
 - Zustand (state management)
 - Recharts (data visualization)
 - Lucide React (icons)
 
 **Backend**
-- Node.js + Express
+- Node.js + Express (Helmet + Rate Limiting)
 - MongoDB Atlas + Mongoose
 - node-cron (scheduled jobs)
 - Nodemailer + Gmail SMTP
@@ -97,7 +99,7 @@ ProYou/
 ## Getting Started
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 22+
 - MongoDB Atlas account (free tier works)
 - Groq API key — [console.groq.com](https://console.groq.com)
 - Gmail account with 2FA enabled

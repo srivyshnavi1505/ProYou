@@ -11,7 +11,7 @@ import { requireAuth } from '../middleware/auth.js'
 const router       = express.Router()
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
 
-const JWT_SECRET   = process.env.JWT_SECRET || 'change_me_in_production'
+const JWT_SECRET   = process.env.JWT_SECRET
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 
 // ── Regex constants ───────────────────────────────────────────────────────────
@@ -65,7 +65,8 @@ async function verifyGithubUsername(username) {
 async function verifyLeetcodeUsername(username) {
   try {
     const r = await axios.post('https://leetcode.com/graphql', {
-      query: `query { matchedUser(username: "${username}") { username } }`
+      query: `query verifyUser($username: String!) { matchedUser(username: $username) { username } }`,
+      variables: { username },
     }, {
       headers: { 'Content-Type': 'application/json', Referer: 'https://leetcode.com' },
       timeout: 5000,
@@ -230,16 +231,31 @@ router.post('/google', async (req, res) => {
       idToken: credential,
       audience: process.env.GOOGLE_CLIENT_ID,
     })
-    const { sub: googleId, email, name, picture } = ticket.getPayload()
+    const payload = ticket.getPayload()
+    const { sub: googleId, email, name, picture, email_verified } = payload
 
     let user = await User.findOne({ $or: [{ googleId }, { email }] })
     if (user) {
       if (!user.googleId) {
+        // Only link Google to an existing password account if Google has
+        // verified the email — otherwise an attacker could create an
+        // unverified Google account with the victim's email and take over.
+        if (!email_verified) {
+          return res.status(403).json({
+            message: 'Cannot link Google account — email is not verified by Google.',
+          })
+        }
         user.googleId = googleId
         user.avatar   = picture
         await user.save()
       }
     } else {
+      // New user — require verified email before account creation too
+      if (!email_verified) {
+        return res.status(403).json({
+          message: 'Google sign-in requires a verified email address.',
+        })
+      }
       user = await User.create({ name, email, googleId, avatar: picture })
     }
 
