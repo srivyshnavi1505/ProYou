@@ -40,7 +40,7 @@ A full-stack AI-powered dashboard that tracks your coding activity, scores your 
 - Nodemailer + Gmail SMTP
 
 **AI / External APIs**
-- Groq API — LLaMA 3.3 70B (placement score, flashcards, tutor, digest)
+- Groq API — openai/gpt-oss-120b (placement score, flashcards, tutor, digest)
 - GitHub REST API
 - LeetCode GraphQL API
 - Newsdata.io API
@@ -251,13 +251,13 @@ npm run build
 # Set VITE_API_URL=https://your-backend.railway.app in Vercel env vars
 ```
 
-### Backend → Railway
+### Backend → Render
 
-1. Connect your GitHub repo to [railway.app](https://railway.app)
+1. Connect your GitHub repo to Render
 2. Set root directory to `backend`
 3. Add all environment variables from the table above
 4. Set `FRONTEND_URL` to your Vercel URL
-5. In MongoDB Atlas → Network Access → Add `0.0.0.0/0` (allows Railway's dynamic IPs)
+5. In MongoDB Atlas → Network Access → Add `0.0.0.0/0` (allows Render's dynamic IPs)
 
 ---
 
