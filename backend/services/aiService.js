@@ -289,23 +289,61 @@ ${problem ? `The problem being discussed:\n${problem}` : 'No specific problem pa
 }
 
 // ── News Filter ───────────────────────────────────────────
+// ── News Filter ───────────────────────────────────────────
 async function filterNewsRelevance(articles, companies) {
-  const summaries = articles.slice(0, 10).map((a, i) => `${i}: ${a.title}`).join('\n')
+  const summaries = articles
+    .slice(0, 10)
+    .map(
+      (a, i) =>
+        `${i}: Title: ${a.title}\nDescription: ${a.description || 'No description available'}`
+    )
+    .join('\n\n')
 
-  const systemPrompt = 'You are evaluating news articles for placement relevance. Return ONLY a valid JSON array.'
+  const systemPrompt =
+    'You are evaluating news articles for placement relevance. Return ONLY valid JSON.'
 
-  const userPrompt = `Evaluate these articles for job seekers targeting: ${companies.join(', ')}.
+  const userPrompt = `Evaluate these news articles for job seekers targeting: ${companies.join(', ')}.
 
 Articles:
 ${summaries}
 
-Return a JSON array:
-[{ "index": 0, "relevance": "high"|"medium"|"low", "summary": "<one sentence why this matters for job seekers>" }]
+Return a JSON array in this exact format:
+[
+  {
+    "index": 0,
+    "relevance": "high",
+    "summary": "One sentence explaining why this matters for job seekers."
+  }
+]
 
-High relevance = hiring news, layoffs, new engineering teams, internship programs, leadership changes.
-Low relevance = quarterly earnings with no hiring mention, generic business news.`
+Relevance rules:
+- HIGH: hiring news, internships, engineering expansion, new technology/products, AI/cloud initiatives, leadership changes that may affect hiring, major company technology developments.
+- MEDIUM: meaningful company/product/business developments that could help a job seeker understand the company.
+- LOW: generic news, unrelated business news, routine financial results with no hiring or technology relevance.
 
-  try { return callGroq(systemPrompt, userPrompt, true) } catch { return [] }
+Do not mark an article LOW simply because it does not mention hiring.
+Return one result for every article.`
+
+  try {
+    const result = await callGroq(
+      systemPrompt,
+      userPrompt,
+      true
+    )
+
+    if (!Array.isArray(result)) {
+      console.error('News relevance filter returned non-array:', result)
+      return []
+    }
+
+    return result
+  } catch (err) {
+    console.error(
+      'News relevance filter error:',
+      err?.response?.data || err?.message || err
+    )
+    return []
+  }
 }
 
 // ── Email Digest ──────────────────────────────────────────
