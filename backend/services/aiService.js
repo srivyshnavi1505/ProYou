@@ -4,7 +4,7 @@ const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 // Model to use — see https://console.groq.com/docs/models
 // llama-3.3-70b-versatile is fast, free-tier, and great at JSON
-const MODEL = 'llama-3.3-70b-versatile'
+const MODEL = 'openai/gpt-oss-120b'
 
 // Core wrapper: retries on 429 rate-limits with exponential backoff
 async function callGroq(systemPrompt, userPrompt, jsonMode = false, retries = 3) {
